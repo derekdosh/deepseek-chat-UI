@@ -1,78 +1,84 @@
-import os
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from openai import OpenAI
-from dotenv import load_dotenv
+import streamlit as st
+import requests
+import hashlib
 
-# Load environment variables
-load_dotenv()
+# YOUR DEEPSEEK API KEY - Added directly
+DEEPSEEK_API_KEY = "sk-4547a326aa734ebdafb53bdd48a10b51"
 
-app = FastAPI()
+# Simple user auth
+users_db = {"admin": hashlib.sha256("password".encode()).hexdigest()}
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # For dev only, restrict in production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+st.title("🤖 My DeepSeek Bot")
 
-# UPDATED: Now using DeepSeek API directly
-openai = OpenAI(
-    api_key=os.getenv("DEEPSEEK_API_KEY"),  # Changed from DEEPINFRA_TOKEN
-    base_url="https://api.deepseek.com/v1",  # Changed to DeepSeek endpoint
-)
+# Initialize session state
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
+if 'messages' not in st.session_state:
+    st.session_state.messages = []
 
-@app.get("/")
-def home():
-    return {"message": "✅ FastAPI + DeepSeek is running!"}
-
-@app.post("/chat")
-async def chat(request: Request):
-    body = await request.json()
-    user_input = body.get("message", "")
-    temperature = body.get("temperature", 0.7)
-    # UPDATED: Using DeepSeek's official model names
-    model = body.get("model", "deepseek-chat")  # Changed from DeepInfra model
-
-    try:
-        chat_completion = openai.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": user_input}],
-            temperature=temperature,
-            max_tokens=4096,  # Added max_tokens for DeepSeek
-        )
-
-        return {"response": chat_completion.choices[0].message.content}
-    except Exception as e:
-        return {"response": f"Error: {str(e)}"}
-
-# Optional: Add streaming support
-@app.post("/chat/stream")
-async def chat_stream(request: Request):
-    body = await request.json()
-    user_input = body.get("message", "")
-    temperature = body.get("temperature", 0.7)
-    model = body.get("model", "deepseek-chat")
-
-    try:
-        stream = openai.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": user_input}],
-            temperature=temperature,
-            stream=True,  # Enable streaming
-            max_tokens=4096,
-        )
+# Login form
+if not st.session_state.logged_in:
+    with st.form("login_form"):
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        submitted = st.form_submit_button("Login")
         
-        # Return a streaming response
-        from fastapi.responses import StreamingResponse
-        import json
+        if submitted:
+            if username in users_db and users_db[username] == hashlib.sha256(password.encode()).hexdigest():
+                st.session_state.logged_in = True
+                st.success("Login successful!")
+                st.rerun()
+            else:
+                st.error("Invalid username or password")
+else:
+    # Logout button in sidebar
+    with st.sidebar:
+        if st.button("Logout"):
+            st.session_state.logged_in = False
+            st.session_state.messages = []
+            st.rerun()
+    
+    # Display chat history
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+    
+    # Chat input
+    if prompt := st.chat_input("Ask something..."):
+        # Add user message to chat history
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
         
-        async def generate():
-            for chunk in stream:
-                if chunk.choices[0].delta.content:
-                    yield json.dumps({"chunk": chunk.choices[0].delta.content}) + "\n"
-        
-        return StreamingResponse(generate(), media_type="application/x-ndjson")
-    except Exception as e:
-        return {"response": f"Error: {str(e)}"}
+        # Get bot response
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking..."):
+                try:
+                    # Call DeepSeek API directly with your key
+                    response = requests.post(
+                        "https://api.deepseek.com/v1/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                            "Content-Type": "application/json"
+                        },
+                        json={
+                            "model": "deepseek-chat",
+                            "messages": [
+                                {"role": "system", "content": "You are a helpful assistant."},
+                                *[{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
+                            ],
+                            "temperature": 0.7,
+                            "max_tokens": 4096
+                        }
+                    )
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        bot_response = result["choices"][0]["message"]["content"]
+                        st.markdown(bot_response)
+                        st.session_state.messages.append({"role": "assistant", "content": bot_response})
+                    else:
+                        st.error(f"API Error: {response.status_code} - {response.text}")
+                        
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
