@@ -1,9 +1,10 @@
 import streamlit as st
 import requests
 import hashlib
+import os  # Add this for Render environment variables
 
-# YOUR DEEPSEEK API KEY - Added directly
-DEEPSEEK_API_KEY = "sk-4547a326aa734ebdafb53bdd48a10b51"
+# Get API key from Render environment variables (NOT hardcoded)
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
 
 # Simple user auth
 users_db = {"admin": hashlib.sha256("password".encode()).hexdigest()}
@@ -54,7 +55,7 @@ else:
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
                 try:
-                    # Call DeepSeek API directly with your key
+                    # Call DeepSeek API directly with key from Render
                     response = requests.post(
                         "https://api.deepseek.com/v1/chat/completions",
                         headers={
