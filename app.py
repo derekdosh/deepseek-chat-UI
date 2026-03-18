@@ -3,8 +3,9 @@ import requests
 import hashlib
 import os
 
-# Get API key from Render environment variables
+# Get values from Render environment variables
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
+CUSTOM_PROMPT = os.environ.get("CUSTOM_PROMPT", "You are a helpful assistant.")  # Default if not set
 
 # Simple user auth
 users_db = {"admin": hashlib.sha256("password".encode()).hexdigest()}
@@ -55,7 +56,7 @@ else:
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
                 try:
-                    # Call DeepSeek API directly
+                    # Call DeepSeek API with prompt from environment
                     response = requests.post(
                         "https://api.deepseek.com/v1/chat/completions",
                         headers={
@@ -65,7 +66,7 @@ else:
                         json={
                             "model": "deepseek-chat",
                             "messages": [
-                                {"role": "system", "content": "You are a helpful assistant."},
+                                {"role": "system", "content": CUSTOM_PROMPT},  # From Render
                                 *[{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
                             ],
                             "temperature": 0.7,
