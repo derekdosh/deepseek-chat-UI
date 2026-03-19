@@ -10,7 +10,7 @@ CUSTOM_PROMPT = os.environ.get("CUSTOM_PROMPT", "You are a helpful assistant.") 
 # Simple user auth
 users_db = {"admin": hashlib.sha256("password".encode()).hexdigest()}
 
-st.title("🤖 Radpid LDR Chat")
+st.title("🤖 Rapid LDR Chat")
 
 # Initialize session state
 if 'logged_in' not in st.session_state:
