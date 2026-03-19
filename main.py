@@ -9,7 +9,7 @@ DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
 # Simple user auth
 users_db = {"admin": hashlib.sha256("password".encode()).hexdigest()}
 
-st.title("🤖 My DeepSeek Bot")
+st.title("🤖Rapid LDR Chat")
 
 # Initialize session state
 if 'logged_in' not in st.session_state:
