@@ -4,10 +4,9 @@ import hashlib
 import os
 
 # --- Configuration ---
-# Get API key from Render environment variables
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
 
-# Define the 3 Modes and their specific AI Personalities
+# Define the 3 Modes
 MODES = {
     "Profile Writer": {
         "icon": "✍️",
@@ -23,12 +22,10 @@ MODES = {
     }
 }
 
-# Simple user auth
 users_db = {"admin": hashlib.sha256("password".encode()).hexdigest()}
 
 # --- Page Setup ---
 st.set_page_config(page_title="Rapid LDR Chat", layout="wide")
-st.title("🤖 Rapid LDR Chat")
 
 # Initialize session state
 if 'logged_in' not in st.session_state:
@@ -36,10 +33,11 @@ if 'logged_in' not in st.session_state:
 if 'messages' not in st.session_state:
     st.session_state.messages = []
 if 'mode' not in st.session_state:
-    st.session_state.mode = "Profile Writer" # Default mode
+    st.session_state.mode = "Profile Writer"
 
 # --- Login Logic ---
 if not st.session_state.logged_in:
+    st.title("🤖 Rapid LDR Chat")
     with st.form("login_form"):
         username = st.text_input("Username")
         password = st.text_input("Password", type="password")
@@ -48,91 +46,63 @@ if not st.session_state.logged_in:
         if submitted:
             if username in users_db and users_db[username] == hashlib.sha256(password.encode()).hexdigest():
                 st.session_state.logged_in = True
-                st.success("Login successful!")
                 st.rerun()
             else:
                 st.error("Invalid username or password")
 
 # --- Main App Logic ---
 else:
-    # Sidebar
-    with st.sidebar:
-        st.header("Settings")
+    # Header with Title and Logout
+    col_title, col_logout = st.columns([4, 1])
+    with col_title:
+        st.title("🤖 Rapid LDR Chat")
+    with col_logout:
+        st.write("") # Spacing
         if st.button("Logout"):
             st.session_state.logged_in = False
             st.session_state.messages = []
             st.rerun()
-        
-        # Display current status
-        st.info(f"Current Mode: **{st.session_state.mode}**")
+
+    # --- MODE SELECTOR (AT THE TOP) ---
+    # This creates a clean toolbar right under the title
+    st.markdown("###") 
+    cols = st.columns(3)
+    
+    for idx, (mode_name, details) in enumerate(MODES.items()):
+        with cols[idx]:
+            # Check if this is the current mode
+            is_active = st.session_state.mode == mode_name
+            if st.button(
+                f"{details['icon']} {mode_name}", 
+                use_container_width=True,
+                type="primary" if is_active else "secondary"
+            ):
+                # If clicked, switch mode and clear chat
+                st.session_state.mode = mode_name
+                st.session_state.messages = []
+                st.rerun()
+
+    st.divider() # Visual separation line
+
+    # Display current mode status
+    st.caption(f"Current Mode: **{st.session_state.mode}**")
 
     # Display chat history
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # --- FOOTER: Mode Selector ---
-    # We create a separator and then 3 columns for the buttons
-    st.markdown("---")
-    
-    # Create 3 equal columns
-    col1, col2, col3 = st.columns(3)
-    
-    # Helper function to handle button clicks
-    def set_mode(mode_name):
-        st.session_state.mode = mode_name
-        # Optional: Clear chat history when switching modes for a fresh start
-        # st.session_state.messages = [] 
-
-    with col1:
-        # Check if this is the active mode to style it differently (disabled button look)
-        is_active = st.session_state.mode == "Profile Writer"
-        st.button(
-            f"{MODES['Profile Writer']['icon']} Profile Writer", 
-            use_container_width=True, 
-            on_click=set_mode, 
-            args=("Profile Writer",),
-            disabled=is_active, # Visually indicates active state
-            type="primary" if is_active else "secondary"
-        )
-
-    with col2:
-        is_active = st.session_state.mode == "Rapid Messaging"
-        st.button(
-            f"{MODES['Rapid Messaging']['icon']} Rapid Messaging", 
-            use_container_width=True, 
-            on_click=set_mode, 
-            args=("Rapid Messaging",),
-            disabled=is_active,
-            type="primary" if is_active else "secondary"
-        )
-
-    with col3:
-        is_active = st.session_state.mode == "Reignite"
-        st.button(
-            f"{MODES['Reignite']['icon']} Reignite", 
-            use_container_width=True, 
-            on_click=set_mode, 
-            args=("Reignite",),
-            disabled=is_active,
-            type="primary" if is_active else "secondary"
-        )
-
     # --- Chat Input Logic ---
     if prompt := st.chat_input("Ask something..."):
-        # Add user message to chat history
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
         
-        # Get bot response
         with st.chat_message("assistant"):
             with st.spinner("Thinking..."):
                 try:
-                    # Select the system prompt based on the current mode
                     current_system_prompt = MODES[st.session_state.mode]["prompt"]
 
-                    # Call DeepSeek API
                     response = requests.post(
                         "https://api.deepseek.com/v1/chat/completions",
                         headers={
